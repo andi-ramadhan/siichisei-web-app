@@ -14,6 +14,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
 
   // Profile state
   const [fullName, setFullName] = useState('')
@@ -69,6 +70,7 @@ export default function Settings() {
         id: user.id,
         full_name: fullName,
         nickname: nickname,
+        updated_at: new Date().toISOString(),
       }
 
       const { error } = await supabase
@@ -79,7 +81,7 @@ export default function Settings() {
 
       setOriginalData({ full_name: fullName, nickname: nickname })
       setIsEditing(false)
-      alert('Profile updated successfully!')
+      setShowSuccessModal(true)
     } catch (error) {
       alert('Error updating profile: ' + error.message)
     } finally {
@@ -195,6 +197,16 @@ export default function Settings() {
         description="Are you sure you want to end your session? You will need to login again to access your dashboard."
         confirmText="Logout"
         variant="destructive"
+      />
+
+      <ConfirmationModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        title="Profile Updated"
+        description="Your profile information has been successfully updated."
+        confirmText="Okay"
+        variant="success"
+        showCancel={false}
       />
     </div>
   )

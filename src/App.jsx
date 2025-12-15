@@ -16,6 +16,7 @@ function App() {
           <Route element={<DashboardLayout />}>
             <Route path="/" element={<Navigate to="/chat" replace />} />
             <Route path="/chat" element={<Chat />} />
+            <Route path="/chat/:chatId" element={<Chat />} />
             <Route path="/classroom" element={<Classroom />} />
             <Route path="/settings" element={<Settings />} />
           </Route>

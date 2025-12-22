@@ -18,6 +18,7 @@ function App() {
             <Route path="/chat" element={<Chat />} />
             <Route path="/chat/:chatId" element={<Chat />} />
             <Route path="/classroom" element={<Classroom />} />
+            <Route path="/classroom/:chatId" element={<Classroom />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Route>

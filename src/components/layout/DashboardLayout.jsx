@@ -44,9 +44,26 @@ export default function DashboardLayout() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      {/* Main Content */}
+      <main className="flex-1 overflow-auto md:mb-0 mb-16">
         <Outlet />
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-zinc-950 border-t border-gray-200 dark:border-zinc-800 flex justify-around items-center z-50">
+        <NavLink to="/chat" className={({ isActive }) => cn("flex flex-col items-center gap-1 p-2 text-xs font-medium transition-colors", isActive ? "text-indigo-600" : "text-gray-500 hover:text-gray-900")}>
+          <MessageSquare className="h-6 w-6" />
+          <span>Chat</span>
+        </NavLink>
+        <NavLink to="/classroom" className={({ isActive }) => cn("flex flex-col items-center gap-1 p-2 text-xs font-medium transition-colors", isActive ? "text-indigo-600" : "text-gray-500 hover:text-gray-900")}>
+          <GraduationCap className="h-6 w-6" />
+          <span>Classroom</span>
+        </NavLink>
+        <NavLink to="/settings" className={({ isActive }) => cn("flex flex-col items-center gap-1 p-2 text-xs font-medium transition-colors", isActive ? "text-indigo-600" : "text-gray-500 hover:text-gray-900")}>
+          <Settings className="h-6 w-6" />
+          <span>Settings</span>
+        </NavLink>
+      </nav>
     </div>
   )
 }

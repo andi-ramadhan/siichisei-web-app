@@ -37,7 +37,7 @@ export default function Settings() {
       const { user } = session
 
       const { data, error } = await supabase
-        .from('profile')
+        .from('profiles')
         .select('full_name, nickname')
         .eq('id', user.id)
         .single()
@@ -74,7 +74,7 @@ export default function Settings() {
       }
 
       const { error } = await supabase
-        .from('profile')
+        .from('profiles')
         .upsert(updates)
 
       if (error) throw error

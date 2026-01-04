@@ -25,8 +25,12 @@ import {
   AlertCircle,
   RefreshCw,
   Users,
-  X
+  X,
+  Music // Import Music icon
 } from 'lucide-react';
+import SoundboardPanel from './SoundboardPanel';
+import { useSoundboardAudio } from '../../hooks/useSoundboardAudio';
+import { LocalAudioTrack } from 'livekit-client';
 
 export default function GroupCallStage({ chat, onEndCall }) {
   const [token, setToken] = useState('');
@@ -121,6 +125,81 @@ function ActiveCallRoom({ chat, currentUser, isTeacherOrAdmin, onEndCall }) {
   const room = useRoomContext();
   const participants = useParticipants(); // All participants
   const { localParticipant } = useLocalParticipant();
+
+  // Soundboard Hook
+  const soundboard = useSoundboardAudio();
+  const [isSoundboardOpen, setIsSoundboardOpen] = useState(false);
+  const publishedTrackRef = useRef(null); // Ref to track the custom published track
+
+  // Effect: Handle Switching between Default Audio and Soundboard Audio
+  useEffect(() => {
+    const handleAudioPublishing = async () => {
+      // Logic:
+      // If Soundboard is Ready (initialized):
+      //    1. Mute default microphone (setMicrophoneEnabled(false))
+      //    2. Publish mixed track if not already
+      // If Soundboard is NOT Ready:
+      //    1. Unpublish mixed track if it exists
+      //    2. Mic handling relies on standard setMicrophoneEnabled
+
+      if (soundboard.isReady && soundboard.mixedStream) {
+        // 1. Ensure default mic is off so we don't double-send or conflict
+        if (localParticipant.isMicrophoneEnabled) {
+          await localParticipant.setMicrophoneEnabled(false);
+        }
+
+        // 2. Publish Mixed Track
+        const audioTrack = soundboard.mixedStream.getAudioTracks()[0];
+        if (audioTrack) {
+          // Check if we are already publishing this specific track
+          // We can check publishedTrackRef or query localParticipant.tracks
+
+          if (!publishedTrackRef.current) {
+            // Create LiveKit LocalAudioTrack
+            const tr = new LocalAudioTrack(audioTrack);
+            const pub = await localParticipant.publishTrack(tr, { name: 'mixed-audio' });
+            publishedTrackRef.current = pub;
+          } else {
+            // We are already publishing a custom track. 
+            // Ideally we shouldn't need to do anything unless the stream changed.
+            // But existing track might need to be replaced if stream reference changed?
+            // usually MediaStreamDestination keeps the same stream.
+          }
+        }
+      }
+    };
+
+    handleAudioPublishing();
+
+    // Cleanup when component unmounts or soundboard stops being ready (rare/reload)
+    return () => {
+      // We usually don't unpublish on re-renders, but if soundboard.isReady turns false?
+      // For now, we assume soundboard lifetime matches component lifetime once init.
+    };
+  }, [soundboard.isReady, soundboard.mixedStream, localParticipant]);
+
+  // Handle Global Mute Toggle while using Soundboard
+  // When using Soundboard, "localParticipant.isMicrophoneEnabled" will likely be FALSE (because we forced it).
+  // We need to track our "Logical Mute State" separately or infer it.
+
+  // Actually, we should just mute/unmute the Custom Track.
+  const handleSoundboardMuteToggle = async () => {
+    if (publishedTrackRef.current) {
+      // Toggle the underlying track or the publication
+      const isMuted = publishedTrackRef.current.isMuted;
+      if (isMuted) {
+        await publishedTrackRef.current.unmute();
+      } else {
+        await publishedTrackRef.current.mute();
+      }
+      // Force update UI (re-render)
+      // Since isMuted property changes don't auto-trigger React state inevitably, we might need state.
+      // BUT, useLocalParticipant hook might update? Let's assume we need manual force
+    }
+  };
+
+  // Helper to know if we are effectively muted
+  const isMixedAudioMuted = publishedTrackRef.current?.isMuted;
 
   // Custom states
   const [raisedHands, setRaisedHands] = useState(new Set());
@@ -250,8 +329,14 @@ function ActiveCallRoom({ chat, currentUser, isTeacherOrAdmin, onEndCall }) {
   };
 
   const toggleMic = async () => {
-    const current = localParticipant.isMicrophoneEnabled;
-    await localParticipant.setMicrophoneEnabled(!current);
+    if (soundboard.isReady && publishedTrackRef.current) {
+      // Logic for Soundboard Mode
+      await handleSoundboardMuteToggle();
+    } else {
+      // Logic for Normal Mode
+      const current = localParticipant.isMicrophoneEnabled;
+      await localParticipant.setMicrophoneEnabled(!current);
+    }
   };
 
   const initiateMicControl = (studentId, studentName) => {
@@ -325,6 +410,15 @@ function ActiveCallRoom({ chat, currentUser, isTeacherOrAdmin, onEndCall }) {
           </div>
         </div>
       )}
+
+      {/* Soundboard Panel (Slide over or Absolute) */}
+      <div className={`absolute right-4 top-20 bottom-24 z-40 transition-transform duration-300 ${isSoundboardOpen ? 'translate-x-0' : 'translate-x-[400px]'}`}>
+        <SoundboardPanel
+          isOpen={isSoundboardOpen}
+          onClose={() => setIsSoundboardOpen(false)}
+          audioState={soundboard}
+        />
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-zinc-800 shrink-0">
@@ -435,27 +529,43 @@ function ActiveCallRoom({ chat, currentUser, isTeacherOrAdmin, onEndCall }) {
       <div className="border-t border-zinc-800 p-4 flex items-center justify-center gap-4 shrink-0">
 
         {/* Mic Toggle (Universal - Controlled by Permission) */}
-        {canSpeak && (
-          <button
-            onClick={toggleMic}
-            className={`p-4 rounded-full transition-colors ${localParticipant?.isMicrophoneEnabled
-              ? 'bg-zinc-700 hover:bg-zinc-600'
-              : 'bg-red-600 hover:bg-red-700'
-              }`}
-          >
-            {localParticipant?.isMicrophoneEnabled ? (
-              <Mic size={24} className="text-white" />
-            ) : (
-              <MicOff size={24} className="text-white" />
-            )}
-          </button>
-        )}
+        {canSpeak && (() => {
+          const isMicOn = soundboard.isReady
+            ? (publishedTrackRef.current && !publishedTrackRef.current.isMuted)
+            : localParticipant?.isMicrophoneEnabled;
+
+          return (
+            <button
+              onClick={toggleMic}
+              className={`p-4 rounded-full transition-colors ${isMicOn
+                ? 'bg-zinc-700 hover:bg-zinc-600'
+                : 'bg-red-600 hover:bg-red-700'
+                }`}
+            >
+              {isMicOn ? (
+                <Mic size={24} className="text-white" />
+              ) : (
+                <MicOff size={24} className="text-white" />
+              )}
+            </button>
+          );
+        })()}
 
         {!isTeacherOrAdmin && (
           <RaiseHandButton
             isRaised={raisedHands.has(currentUser.id)}
             onToggle={toggleRaiseHand}
           />
+        )}
+
+        {/* Soundboard Toggle (Teacher/Admin OR Permitted Student) */}
+        {canSpeak && (
+          <button
+            onClick={() => setIsSoundboardOpen(!isSoundboardOpen)}
+            className={`p-4 rounded-full transition-colors ${isSoundboardOpen ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-zinc-700 hover:bg-zinc-600'}`}
+          >
+            <Music size={24} className="text-white" />
+          </button>
         )}
 
         <button
